@@ -88,3 +88,35 @@ else:
 
     # Put the chat UI here (text_input, display)
     # ...
+if 'qa_chain' not in st.session_state and 'vectordb' in locals():
+    # build qa_chain once after loading vectordb
+    from langchain_openai import ChatOpenAI
+    from langchain.chains import ConversationalRetrievalChain
+    from langchain.memory import ConversationBufferMemory
+
+    llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
+    memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True, output_key="answer")
+    retriever = vectordb.as_retriever(search_type="similarity", search_kwargs={"k": 4})
+
+    st.session_state.qa_chain = ConversationalRetrievalChain.from_llm(
+        llm=llm,
+        retriever=retriever,
+        memory=memory,
+        return_source_documents=True,
+        output_key="answer"
+    )
+
+# UI for chat
+st.subheader("Ask questions about your data")
+
+if "qa_chain" in st.session_state:
+    user_query = st.text_input("Enter your question:")
+    if user_query:
+        with st.spinner("Thinking..."):
+            result = st.session_state.qa_chain.invoke({"question": user_query})
+            st.write("### 🤖 Answer:")
+            st.write(result["answer"])
+            with st.expander("Sources"):
+                for i, doc in enumerate(result["source_documents"], start=1):
+                    st.markdown(f"**Source {i}:** {doc.metadata}")
+                    st.write(doc.page_content[:400] + "…")
